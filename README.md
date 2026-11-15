@@ -4,6 +4,8 @@ A desktop receiver for RTL-SDR dongles, built for the Nooelec NESDR SMART v5 and
 [SDR++](https://github.com/AlexandreRouma/SDRPlusPlus). The GUI uses Dear ImGui, and all signal
 processing uses Intel oneAPI IPP.
 
+![sdr-app tuned to a WFM broadcast station at 99.6 MHz](docs/screenshot.jpg)
+
 ## Features
 
 - Detects RTL-SDR devices automatically, including ones plugged in while the app is running
