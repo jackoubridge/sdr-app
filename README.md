@@ -15,6 +15,7 @@ processing uses Intel oneAPI IPP.
 - Live spectrum and waterfall, with adjustable FFT size, dB range and smoothing
 - Click or drag on the spectrum to tune; scroll to step between channels
 - WFM, NFM and AM demodulation, with adjustable channel bandwidth and volume
+- Squelch with a signal-level meter: mutes the audio while the channel is weaker than a set level
 - UI zoom with Ctrl + / Ctrl − / Ctrl 0, or Ctrl + mouse wheel
 
 ## Requirements
@@ -50,6 +51,8 @@ cmake --build build -j
 4. Pick a mode under **Radio** (WFM for broadcast FM), then click a signal on the spectrum to tune
    to it. The red line and shaded band show what you're listening to.
 5. Adjust **Gain** until signals stand clear of the noise without the noise floor rising too high.
+6. For NFM or AM, tick **Squelch** and drag its level just above the meter's reading with no signal.
+   The hiss is then muted until a transmission comes through.
 
 The device and sample rate are locked while playing. Every other setting can change live.
 

@@ -58,6 +58,7 @@ void Receiver::applyPendingSettings() {
     } else {
         demod.setOffset(settings.offsetHz);
         demod.setVolume(settings.volume);
+        demod.setSquelch(settings.squelchEnabled, settings.squelchLevelDb);
     }
 }
 
@@ -87,5 +88,6 @@ void Receiver::processRaw(const uint8_t* data, int len) {
 
     audioBlock.clear();
     demod.process(iq, count, audioBlock);
+    channelLevel.store(demod.channelLevelDb());
     audio.push(audioBlock.data(), static_cast<int>(audioBlock.size()));
 }

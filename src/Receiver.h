@@ -3,6 +3,7 @@
 #include "AudioSink.h"
 #include "Dsp.h"
 
+#include <atomic>
 #include <cstdint>
 #include <mutex>
 #include <vector>
@@ -25,6 +26,9 @@ public:
     void setDemod(const DemodSettings& settings);
     void setFftSize(int size);
 
+    // Power in the demodulated channel, in dBFS; safe to read from the GUI thread
+    float channelLevelDb() const { return channelLevel.load(); }
+
     // Moves the spectrum lines produced since the last call into `out` (oldest first)
     void takeSpectrumLines(std::vector<std::vector<float>>& out);
 
@@ -38,6 +42,8 @@ private:
     DemodSettings wantedDemod;
     int wantedFftSize = 2048;
     bool settingsChanged = false;
+
+    std::atomic<float> channelLevel{-150.0f};
 
     std::mutex linesMutex;
     std::vector<std::vector<float>> lines;

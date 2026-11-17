@@ -38,6 +38,10 @@ constexpr float kBandwidthMinKHz[] = {50.0f, 5.0f, 3.0f};
 constexpr float kBandwidthMaxKHz[] = {216.0f, 40.0f, 40.0f};
 constexpr double kTuningSteps[] = {100'000.0, 12'500.0, 1'000.0};
 
+// Range of the squelch slider and the signal meter, in dBFS (as in SDR++)
+constexpr float kSquelchMinDb = -100.0f;
+constexpr float kSquelchMaxDb = 0.0f;
+
 // Tuning range of the R820T2 tuner in the NESDR SMART
 constexpr double kMinFreqMHz = 24.0;
 constexpr double kMaxFreqMHz = 1766.0;
@@ -62,6 +66,20 @@ bool optionCombo(const char* id, int& index, const Option (&options)[N]) {
         ImGui::EndCombo();
     }
     return changed;
+}
+
+// The x position of the centre of the squelch slider's handle when it is set to `db`,
+// for a slider spanning left..right on screen.
+// This copies how Dear ImGui lays out a slider (SliderBehaviorT in imgui_widgets.cpp):
+// the handle is GrabMinSize wide and stays 2 pixels inside the frame, so its centre
+// moves from left + 2 + handle/2 at the minimum to right - 2 - handle/2 at the maximum.
+float squelchDbToX(float db, float left, float right) {
+    const float handlePadding = 2.0f;
+    float handleWidth = ImGui::GetStyle().GrabMinSize;
+    float start = left + handlePadding + handleWidth / 2.0f;
+    float end = right - handlePadding - handleWidth / 2.0f;
+    float t = std::clamp((db - kSquelchMinDb) / (kSquelchMaxDb - kSquelchMinDb), 0.0f, 1.0f);
+    return start + t * (end - start);
 }
 
 // A round grid spacing (1, 2 or 5 times a power of ten) close to `rough`
@@ -368,9 +386,60 @@ void App::drawRadioSection() {
         receiver.setDemod(demod);
     }
 
+    drawSquelch();
+
     ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
     ImGui::TextWrapped("Click the spectrum to tune; scroll to step %.1f kHz", tuningStep() / 1000.0);
     ImGui::PopStyleColor();
+}
+
+void App::drawSquelch() {
+    if (ImGui::Checkbox("Squelch", &demod.squelchEnabled)) {
+        receiver.setDemod(demod);
+    }
+    ImGui::SetItemTooltip("Mute the audio while the signal in the channel is weaker than the level below");
+
+    ImGui::BeginDisabled(!demod.squelchEnabled);
+    ImGui::SetNextItemWidth(-FLT_MIN);
+    if (ImGui::SliderFloat("##squelch", &demod.squelchLevelDb, kSquelchMinDb, kSquelchMaxDb, "%.1f dB")) {
+        receiver.setDemod(demod);
+    }
+    ImGui::EndDisabled();
+
+    // Signal meter: how strong the channel is, with a mark at the squelch level.
+    // Green while the audio is passing, grey while the squelch is muting it.
+    // The meter is as wide as the slider above it, so dB values line up with the slider handle.
+    float levelDb = playing ? receiver.channelLevelDb() : kSquelchMinDb;
+    bool open = !demod.squelchEnabled || levelDb >= demod.squelchLevelDb;
+    ImU32 barColour = open ? IM_COL32(70, 190, 90, 255) : IM_COL32(110, 110, 110, 255);
+
+    // Where the meter will be drawn
+    float barLeft = ImGui::GetCursorScreenPos().x;
+    float barRight = barLeft + ImGui::GetContentRegionAvail().x;
+
+    // The bar's fill should end at the level's position on the slider. ProgressBar fills
+    // a fraction of its inside width (the frame minus its border), so work that fraction out.
+    float fraction = 0.0f;
+    if (levelDb > kSquelchMinDb) {
+        float border = ImGui::GetStyle().FrameBorderSize;
+        float fillLeft = barLeft + border;
+        float fillRight = barRight - border;
+        fraction = (squelchDbToX(levelDb, barLeft, barRight) - fillLeft) / (fillRight - fillLeft);
+    }
+
+    char label[32];
+    std::snprintf(label, sizeof label, playing ? "%.1f dB" : "--", levelDb);
+    ImGui::PushStyleColor(ImGuiCol_PlotHistogram, barColour);
+    ImGui::ProgressBar(fraction, ImVec2(-FLT_MIN, 0), label);
+    ImGui::PopStyleColor();
+
+    if (demod.squelchEnabled) {
+        ImVec2 barMin = ImGui::GetItemRectMin();
+        ImVec2 barMax = ImGui::GetItemRectMax();
+        float x = squelchDbToX(demod.squelchLevelDb, barMin.x, barMax.x);
+        ImGui::GetWindowDrawList()->AddLine(ImVec2(x, barMin.y), ImVec2(x, barMax.y), IM_COL32(255, 70, 70, 255), 2.0f);
+    }
+    ImGui::SetItemTooltip("Signal level in the channel. The red mark is the squelch level.");
 }
 
 void App::drawDisplaySection() {

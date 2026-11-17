@@ -28,6 +28,7 @@ private:
     void drawToolbar();
     void drawSourceSection();
     void drawRadioSection();
+    void drawSquelch();
     void drawDisplaySection();
     void handleZoomShortcuts();
     void setZoom(float newZoom);

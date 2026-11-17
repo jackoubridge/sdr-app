@@ -235,6 +235,13 @@ void Demodulator::configure(int rate, const DemodSettings& newSettings) {
     ncoPhase = 0.0f;
     lastSample = {0, 0};
     amCarrier = 0.0f;
+    levelDb = -150.0f;
+    squelchGain = settings.squelchEnabled ? 0.0f : 1.0f;
+}
+
+void Demodulator::setSquelch(bool enabled, float levelDbThreshold) {
+    settings.squelchEnabled = enabled;
+    settings.squelchLevelDb = levelDbThreshold;
 }
 
 void Demodulator::setOffset(double offsetHz) {
@@ -260,6 +267,14 @@ void Demodulator::process(const Ipp32fc* in, int len, std::vector<float>& audioO
         return;
     }
 
+    // Measure the channel's average power: sum(|x|^2) / n, in dBFS.
+    // A full-scale carrier reads 0 dB, the same scale as the spectrum display.
+    int n = static_cast<int>(channel.size());
+    Ipp64f norm = 0.0;
+    ippsNorm_L2_32fc64f(channel.data(), n, &norm);
+    double power = norm * norm / n;
+    levelDb = static_cast<float>(10.0 * std::log10(std::max(power, 1e-15)));
+
     // 3. Demodulate to audio
     size_t start = audioOut.size();
     switch (settings.mode) {
@@ -283,6 +298,36 @@ void Demodulator::process(const Ipp32fc* in, int len, std::vector<float>& audioO
     int audioLen = static_cast<int>(audioOut.size() - start);
     ippsMulC_32f_I(settings.volume, audio, audioLen);
     ippsThreshold_LTValGTVal_32f_I(audio, audioLen, -1.0f, -1.0f, 1.0f, 1.0f);
+
+    // 5. Squelch
+    applySquelch(audio, audioLen);
+}
+
+void Demodulator::applySquelch(float* audio, int len) {
+    if (len == 0) {
+        return;
+    }
+
+    // Open when the channel is loud enough (or the squelch is off), closed otherwise.
+    // The decision is made once per block, like SDR++.
+    bool open = !settings.squelchEnabled || levelDb >= settings.squelchLevelDb;
+    float target = open ? 1.0f : 0.0f;
+
+    if (squelchGain == target) {
+        // No change: leave the audio alone, or silence the whole block
+        if (target == 0.0f) {
+            ippsZero_32f(audio, len);
+        }
+        return;
+    }
+
+    // The squelch just opened or closed. Fade over this block rather than switching
+    // instantly, which would make an audible click.
+    for (int i = 0; i < len; ++i) {
+        float gain = squelchGain + (target - squelchGain) * (i + 1) / len;
+        audio[i] *= gain;
+    }
+    squelchGain = target;
 }
 
 void Demodulator::demodulateFm(double deviationHz) {
