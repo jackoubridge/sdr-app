@@ -186,7 +186,11 @@ void App::applyCenterFreq() {
 void App::setOffset(double offsetHz) {
     // Keep the whole channel inside the captured band
     double limit = std::max(0.0, sampleRate() / 2.0 - demod.bandwidthHz / 2.0);
-    demod.offsetHz = std::clamp(offsetHz, -limit, limit);
+    // Whole hertz, like the hardware's centre frequency. The +/- buttons on the centre
+    // box add 0.1 MHz in floating point, which can leave the centre a hair off a round
+    // value (88.199999999999989), and tuning to the centre would then give an offset
+    // of 0.000000015 Hz instead of 0.
+    demod.offsetHz = std::round(std::clamp(offsetHz, -limit, limit));
     receiver.setDemod(demod);
 }
 

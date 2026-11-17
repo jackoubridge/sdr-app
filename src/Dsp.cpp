@@ -249,6 +249,12 @@ void Demodulator::setOffset(double offsetHz) {
     // Shifting by -offset brings the wanted signal to 0 Hz. IPP wants a frequency in [0, 1)
     double freq = -offsetHz / sampleRate;
     ncoFreq = static_cast<float>(freq - std::floor(freq));
+    // A tiny positive offset gives a value just below 1 that rounds up to exactly 1.0f
+    // as a float. IPP rejects 1.0, and the tone would then never be generated, so wrap it
+    // to 0 (the same frequency).
+    if (ncoFreq >= 1.0f) {
+        ncoFreq = 0.0f;
+    }
 }
 
 void Demodulator::process(const Ipp32fc* in, int len, std::vector<float>& audioOut) {
